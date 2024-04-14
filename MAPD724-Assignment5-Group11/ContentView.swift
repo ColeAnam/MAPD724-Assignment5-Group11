@@ -8,7 +8,16 @@
 import SwiftUI
 import MapKit
 
+class favRestaurants: ObservableObject {
+    @Published var favourites: [Restaurants] = []
+}
+
 struct ContentView: View {
+    @State private var selectedAnnotation: RestaurantAnnotation?
+    @State private var isPresent = false
+    @State var currentDetent: PresentationDetent = .fraction(0.3)
+    @State var selection: Int?
+    @ObservedObject var favs = favRestaurants()
     
     let toronto = MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 43.65, longitude: -79.38), latitudinalMeters: 100, longitudinalMeters: 100)
     
@@ -24,8 +33,6 @@ struct ContentView: View {
         Restaurants(openTime: "12 a.m.", closingTime: "11 p.m.", rating: "4.4", restName: "Trattoria Nervosa", address: "75 Yorkville Ave, Toronto, ON M5R 1B8", coordinate: CLLocationCoordinate2D(latitude: 43.67169823915426,  longitude: -79.3909627339347)),
         Restaurants(openTime: "11:30 a.m.", closingTime: "10:30 p.m.", rating: "4.1", restName: "Thai on Yonge", address: "370 Yonge St, Toronto, ON M5B 1S5", coordinate: CLLocationCoordinate2D(latitude: 43.65980742373719,  longitude: -79.38129942356892))
     ]
-    
-    @State var selection: Int?
     
     var body: some View {
         VStack {
@@ -46,14 +53,98 @@ struct ContentView: View {
                                     .scaleEffect(selection == index ? 2 : 1)
                                     .tag(index)
                             })
+                            .onTapGesture {
+                                print(restaurants[index].restName)
+                                selectedAnnotation = RestaurantAnnotation(restaurant: restaurants[index])
+                                isPresent = true
+                            }
                         },
                         label: {
                             Text(restaurants[index].restName)
                         })
                 }
             }
+            .onTapGesture {
+                selectedAnnotation = nil
+                isPresent = false
+            }
         }
-        
+        .overlay {
+            VStack {
+                HStack {
+                    Spacer()
+                    Image(systemName: "star.fill")
+                        .resizable()
+                        .foregroundColor(.yellow)
+                        .frame(width: 40, height: 40)
+                        .scaledToFit()
+                        .onTapGesture {
+                            print("Favourites tapped")
+                        }
+                        .padding(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 40))
+                }
+                Spacer()
+            }
+        }
+        .sheet(isPresented: $isPresent) {
+            if currentDetent == .fraction(0.3) {
+                SheetViewSmall(favs: favs, selectedRest: $selectedAnnotation)
+                    .presentationDetents([.fraction(0.3), .large], selection: $currentDetent)
+            }
+        }
+    }
+    
+}
+
+struct RestaurantAnnotation {
+    let restaurant: Restaurants
+}
+
+struct SheetViewSmall: View {
+    @ObservedObject var favs: favRestaurants
+    @Environment(\.dismiss) var dismiss
+    @Binding var selectedRest: RestaurantAnnotation?
+    @State var starIcon = "star"
+    
+    var body: some View {
+        Color.white
+            .overlay(
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .top, spacing: 20) {
+                        Text(selectedRest!.restaurant.restName)
+                            .fontWeight(.bold)
+                        Spacer()
+                        Image(systemName: starIcon)
+                            .onTapGesture {
+                                if (starIcon == "star") {
+                                    starIcon = "star.fill"
+                                    favs.favourites.append(selectedRest!.restaurant)
+                                }
+                                else {
+                                    starIcon = "star"
+                                    if let index = favs.favourites.firstIndex(of: selectedRest!.restaurant) {
+                                        favs.favourites.remove(at: index)
+                                    }
+                                }
+                            }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(EdgeInsets(top: 14, leading: 0, bottom: 0, trailing: 0))
+                    HStack {
+                        Text(selectedRest!.restaurant.rating)
+                        Image(systemName: "star.fill")
+                    }
+                    Text("\(selectedRest!.restaurant.openTime) - \(selectedRest!.restaurant.closingTime)")
+                    Text(selectedRest!.restaurant.address)
+                    Spacer()
+                }
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .ignoresSafeArea()
+            .onTapGesture {
+                dismiss()
+            }
     }
 }
 
