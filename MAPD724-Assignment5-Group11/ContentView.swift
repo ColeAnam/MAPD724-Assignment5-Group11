@@ -44,17 +44,20 @@ struct ContentView: View {
                                 
                                 Image(systemName: "circle.fill")
                                     .padding()
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(Gradient(colors: [.orange, .white]))
                                     .scaleEffect(selection == index ? 4 : 2)
                                     .tag(index)
-                                Image(systemName: "fork.knife")
-                                    .padding()
-                                    .foregroundStyle(.black)
-                                    .scaleEffect(selection == index ? 2 : 1)
-                                    .tag(index)
+                                    .overlay(
+                                        Image(systemName: "fork.knife")
+                                            .padding()
+                                            .foregroundStyle(.black)
+                                            .scaleEffect(selection == index ? 2 : 1)
+                                    )
+                                    
                             })
+                            .tag(index)
                             .onTapGesture {
-                                print(restaurants[index].restName)
+                                //print(restaurants[index].restName)
                                 selectedAnnotation = RestaurantAnnotation(restaurant: restaurants[index])
                                 isPresent = true
                             }
