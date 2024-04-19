@@ -8,13 +8,41 @@
 import SwiftUI
 import MapKit
 
+//class favRestaurants: ObservableObject {
+//    @Published var favourites: [Restaurants] = []
+//}
+
 class favRestaurants: ObservableObject {
-    @Published var favourites: [Restaurants] = []
+    @Published var favourites: [Restaurants] {
+        didSet {
+            saveFavorites()
+        }
+    }
+    
+    private let defaultsKey = "favoriteRestaurants"
+    
+    init() {
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: defaultsKey),
+           let decoded = try? JSONDecoder().decode([Restaurants].self, from: data) {
+            self.favourites = decoded
+        } else {
+            self.favourites = []
+        }
+    }
+    
+    private func saveFavorites() {
+        if let encoded = try? JSONEncoder().encode(favourites) {
+            UserDefaults.standard.set(encoded, forKey: defaultsKey)
+        }
+    }
 }
+
 
 struct ContentView: View {
     @State private var selectedAnnotation: RestaurantAnnotation?
     @State private var isPresent = false
+    @State private var isFavoritesSheetPresented = false
     @State var currentDetent: PresentationDetent = .fraction(0.3)
     @State var selection: Int?
     @ObservedObject var favs = favRestaurants()
@@ -73,31 +101,55 @@ struct ContentView: View {
             }
         }
         .overlay {
-            VStack {
-                HStack {
-                    Spacer()
-                    Image(systemName: "star.fill")
-                        .resizable()
-                        .foregroundColor(.yellow)
-                        .frame(width: 40, height: 40)
-                        .scaledToFit()
-                        .onTapGesture {
-                            print("Favourites tapped")
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Image(systemName: "star.fill")
+                                .resizable()
+                                .foregroundColor(.yellow)
+                                .frame(width: 40, height: 40)
+                                .scaledToFit()
+                                .onTapGesture {
+                                    print("Favourites tapped")
+                                    isFavoritesSheetPresented = true
+                                }
+                                .padding(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 40))
                         }
-                        .padding(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 40))
+                        Spacer()
+                    }
                 }
-                Spacer()
-            }
-        }
         .sheet(isPresented: $isPresent) {
             if currentDetent == .fraction(0.3) {
                 SheetViewSmall(favs: favs, selectedRest: $selectedAnnotation)
                     .presentationDetents([.fraction(0.3), .large], selection: $currentDetent)
             }
         }
+        .sheet(isPresented: $isFavoritesSheetPresented) {
+                    FavoritesSheetView(favs: favs)
+                }
     }
     
 }
+
+struct FavoritesSheetView: View {
+    @ObservedObject var favs: favRestaurants
+    
+    var body: some View {
+        NavigationView {
+            List(favs.favourites, id: \.id) { restaurant in
+                VStack(alignment: .leading) {
+                    Text(restaurant.restName)
+                        .font(.headline)
+                    Text(restaurant.address)
+                        .font(.subheadline)
+                }
+            }
+            .navigationTitle("Favorites")
+        }
+    }
+}
+
+
 
 struct RestaurantAnnotation {
     let restaurant: Restaurants
@@ -122,14 +174,19 @@ struct SheetViewSmall: View {
                                 if (starIcon == "star") {
                                     starIcon = "star.fill"
                                     favs.favourites.append(selectedRest!.restaurant)
+                                    // Show confirmation message
+                                    print("Added to favorites!")
                                 }
                                 else {
                                     starIcon = "star"
                                     if let index = favs.favourites.firstIndex(of: selectedRest!.restaurant) {
                                         favs.favourites.remove(at: index)
+                                        // Show confirmation message
+                                        print("Removed from favorites!")
                                     }
                                 }
                             }
+
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(EdgeInsets(top: 14, leading: 0, bottom: 0, trailing: 0))
@@ -151,7 +208,8 @@ struct SheetViewSmall: View {
     }
 }
 
-class Restaurants: NSObject, MKAnnotation {
+class Restaurants: NSObject, MKAnnotation, Codable {
+    let id = UUID()
     let restName, address, openTime, closingTime, rating: String
     var coordinate: CLLocationCoordinate2D
     
@@ -164,6 +222,34 @@ class Restaurants: NSObject, MKAnnotation {
         self.rating = rating
     }
     
+    enum CodingKeys: String, CodingKey {
+        case restName, address, openTime, closingTime, rating, coordinate
+    }
+    
+    required init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        restName = try container.decode(String.self, forKey: .restName)
+        address = try container.decode(String.self, forKey: .address)
+        openTime = try container.decode(String.self, forKey: .openTime)
+        closingTime = try container.decode(String.self, forKey: .closingTime)
+        rating = try container.decode(String.self, forKey: .rating)
+        
+        // Custom decoding for CLLocationCoordinate2D
+        let coordinateData = try container.decode([Double].self, forKey: .coordinate)
+        coordinate = CLLocationCoordinate2D(latitude: coordinateData[0], longitude: coordinateData[1])
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(restName, forKey: .restName)
+        try container.encode(address, forKey: .address)
+        try container.encode(openTime, forKey: .openTime)
+        try container.encode(closingTime, forKey: .closingTime)
+        try container.encode(rating, forKey: .rating)
+        
+        // Custom encoding for CLLocationCoordinate2D
+        try container.encode([coordinate.latitude, coordinate.longitude], forKey: .coordinate)
+    }
 }
 
 #Preview {
